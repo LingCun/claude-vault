@@ -2,7 +2,7 @@
 project: 컬처캐쉬
 status: 'Phase 2 Step 02~06 + 보강 패치 완료 / 2026-05-20 시작: BLD JVM(-Dbld.id=CULTURE) 실행 → E2E 검증 → Step 07'
 created: 2026-05-18
-updated: 2026-05-19
+updated: 2026-05-21
 tags:
   - 업무
   - 핑거페이
@@ -57,7 +57,8 @@ up: "[[_INDEX]]"
 |---|---|---|
 | `TBAD_CODE` | (COL_NM=PM_CD, CODE1=32) | META_KEY=`CULTURE`, USE_FLG=`1` (기존 row UPDATE) |
 | `TBAD_CODE` | (COL_NM=SPM_CD, CODE1=07) | META_KEY=`SPM_CD_CULTURE`, DESC1=`CULTURE`, DESC2=`N` (신규) |
-| `TBAD_CODE` | (COL_NM=RSLT_CD, CODE1=32) | 5건: 0000/F201/F901/3081/F999 |
+| `TBAD_CODE` | (COL_NM=RSLT_CD, CODE1=32) | 5건: 0000/F201/F901/3081/F999 (핑거페이 내부 결과코드) |
+| `TBAD_CODE` | (COL_NM=CULTURE_RSLT_CD) | **109건** — 컬쳐랜드 자체 응답코드 → 내부 RSLT_CD/32 매핑 (CODE1: 01=로그인 31건 / 02=결제 41건 / 03=취소 14건 / 04=부분취소 23건). NICEPG_RSLT_CD 패턴 차용. 2026-05-21 추가 |
 | `TBSI_PTN_CPID` | (PTN_CD=`CULT`, PTN_CPID=`MOCKCULTURE1`) | MOCK 파트너 마스터 (PM_CD=32, SPM_CD=07, 컬쳐랜드 테스트 URL JSON) |
 | `TBSI_MBS_PTN_LNK` | (MID=`100000098m`, PM_CD=32, SPM_CD=07) | PTN_CD=`CULT`, PTN_CPID=`MOCKCULTURE1` |
 | `TBSI_MBS_SVC` | (MID=`100000098m`, PM_CD=32, SPM_CD=07) | USE_FLG=`1` |
@@ -243,6 +244,7 @@ sequenceDiagram
 |---|---|---|
 | 분석 보고서 | active | `C:\claude\vault\업무\컬처캐쉬\2026-05-18_컬처캐쉬_연동_분석보고서_v01.0.md` |
 | DB 셋업 SQL v03 ★ | **active** | `C:\claude\vault\업무\컬처캐쉬\2026-05-19_컬처캐쉬_DB셋업_v03.sql` |
+| **CULTURE_RSLT_CD 등재 SQL (v03 보조)** ★ | **active (2026-05-21 신규)** | `C:\claude\vault\업무\컬처캐쉬\2026-05-21_컬처캐쉬_CULTURE_RSLT_CD_등재.sql` |
 | 가맹점 연동 가이드 | active | `C:\claude\vault\업무\컬처캐쉬\2026-05-18_핑거페이_가맹점연동가이드_컬처캐쉬_v01.0.docx` |
 | Step 01 변경파일 노트 | done | `C:\claude\vault\업무\컬처캐쉬\2026-05-18_컬처캐쉬_FRONT변경파일목록_step01.md` |
 | Step 02 변경파일 노트 | done | `C:\claude\vault\업무\컬처캐쉬\2026-05-19_컬처캐쉬_FRONT변경파일목록_step02.md` |
@@ -268,4 +270,33 @@ sequenceDiagram
 
 ---
 
-*최종 갱신: 2026-05-19. 코드/DB/명명이 바뀌면 본 파일의 해당 섹션을 덮어쓰기.*
+*최종 갱신: 2026-05-21. 코드/DB/명명이 바뀌면 본 파일의 해당 섹션을 덮어쓰기.*
+
+---
+
+## 10. 공통코드 — CULTURE_RSLT_CD 매핑 정책 (2026-05-21 추가)
+
+NICEPG (`NICEPG_RSLT_CD`) 와 동일 패턴으로 컬쳐랜드 자체 응답코드를 `TBAD_CODE` 에 등재.
+
+| 컬럼 | 의미 |
+|---|---|
+| `COL_NM` | `'CULTURE_RSLT_CD'` |
+| `CODE1` | 거래 구분: `01`=로그인 인증 / `02`=결제 승인 / `03`=취소 / `04`=부분취소 |
+| `CODE2` | `'*'` |
+| `CODE3` | 컬쳐랜드 RetVal 코드 (4자리, `0000`/`0450`/... `0801`/`0802`) |
+| `CODE4` | 내부 매핑 결과코드 (RSLT_CD/32 의 5건 중 하나) |
+| `DESC1` | 한글 메시지 |
+| `DESC2` | `'컬쳐랜드응답코드'` |
+| `DESC3` | `'32'` (PM_CD) |
+
+**CODE4 매핑 규칙**:
+- `0000` (정상) → CODE3=`0000`
+- `F201` (사용자 인증 취소) → 푸시 로그인 승인 대기류 (`0480`/`0481` of CODE1=02)
+- `F901` (컬쳐랜드 통신 실패) → DB/시스템/통신 (`0417`/`0418`/`0462`/`0463`/`0473`/`0801`/`0802`)
+- `3081` (잔액 부족) → 금액/한도 (`0402`/`0408`/`0413`/`0414`/`0478`)
+- `F999` (기타 실패) → 그 외 전부
+
+**출처**: `[최신]쇼핑몰에러코드정의.pptx` (CI 방식, 6 slides)
+**SQL 파일**: `C:\claude\vault\업무\컬처캐쉬\2026-05-21_컬처캐쉬_CULTURE_RSLT_CD_등재.sql`
+**총 row 수**: 109 (01: 31 / 02: 41 / 03: 14 / 04: 23)
+

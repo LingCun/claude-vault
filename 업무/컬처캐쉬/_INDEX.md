@@ -2,7 +2,7 @@
 project: 컬처캐쉬
 status: 'Phase 2 Step 02~06 + 보강 패치 완료 / 2026-05-20 시작: BLD JVM(-Dbld.id=CULTURE) 실행'
 created: 2026-05-18
-updated: 2026-05-21
+updated: 2026-05-19
 tags:
   - 업무
   - 핑거페이
@@ -47,7 +47,6 @@ tags:
 | [[2026-05-19_컬처캐쉬_네이밍규약_정정\|네이밍 규약 정정 (CULTURELAND/CURT → CULTURE)]] | 사용자 수동 일괄 변경. front 1차(코드) + 2차(DB) 모두 적용 | **active (반드시 참고)** |
 | [가맹점용 연동 가이드 (.docx)](2026-05-18_핑거페이_가맹점연동가이드_컬처캐쉬_v01.0.docx) | 가맹점이 컬처캐쉬 연동 시 참고 | active |
 | **[★ DB셋업 SQL v03 (.sql)](2026-05-19_컬처캐쉬_DB셋업_v03.sql)** | **실제 적용용** (CULTURE 3종 DDL, PTN_CD='CULT' (4자), PTN_CPID='MOCKCULTURE1'). §① TEARDOWN (CURT+CULTURE 양쪽 DROP/DELETE) → §②~④ 신규 CREATE/INSERT. **idempotent** — 기존 환경 상태와 무관하게 재실행 가능 | **active** |
-| **[★ CULTURE_RSLT_CD 등재 SQL (.sql)](2026-05-21_컬처캐쉬_CULTURE_RSLT_CD_등재.sql)** | v03 보조 패치 — 컬쳐랜드 자체 응답코드 → 내부 RSLT_CD/32 매핑 109건 (NICEPG_RSLT_CD 패턴 차용). CODE1: 01=로그인 31 / 02=결제 41 / 03=취소 14 / 04=부분취소 23. idempotent (선행 DELETE 포함) | **active (2026-05-21 신규)** |
 | [DB셋업 SQL v02 (.sql)](2026-05-18_컬처캐쉬_DB셋업_v02.sql) | (참고) 원본 CURT 명명. v03 으로 대체됨 | superseded |
 | [DB셋업 SQL v01 (.sql)](2026-05-18_컬처캐쉬_테스트환경_setup.sql) | (참고) Oracle 방언, demotest0m. v02 으로 대체됨 | superseded |
 
@@ -149,5 +148,4 @@ sequenceDiagram
 | 2026-05-19 | — | **Step 06 완료** — BLD 컬처캐쉬 Mock 처리 빈 4종 신설: `CultureConstants.java` (PM_CD/SPM_CD/PTN_CD/Mock 상수), `CommonCultureMethod.java` (Mock 8120/8220 응답 합성 헬퍼), `PayCultureBean.java` (승인 처리, processSendAppl 에서 Mock 합성 → saveTbtrCulture), `CancelCultureBean.java` (전체/망상취소, Mock 합성 → updateTbtrCultureForCancel). 모두 card.xml 패턴 차용. |
 | 2026-05-19 | — | **승인 호출 NPE 수정** — `/payment/v1/approval` 의 `PayMethodService.doResult()` 에서 `info-{env}.json` 에 `"CULTURE"` 키 없어서 paymethodInfoMap NPE 발생. (1) FRONT `info-local.json/dev/prod` 에 `"CULTURE"` 엔트리 추가 (XX:DEFAULT IP=127.0.0.1 PORT=20501), (2) BLD `payinfo-local.json/dev/prod` 에 pmCd=32/bldId=CULTURE/bldPort=20501 엔트리 추가 (VACNT 패턴 차용, mandatory saveTbtrCulture). 또한 `CultureReturnController` 에 hashString/ediDate 생성 추가 (SHA256(mid+ediDate+goodsAmt+mkey)) — `@ValidHashMap` AOP 통과용. |
 | 2026-05-19 | — | **spmCd=01→07 근본 해결** — 그동안 stub 분기로 우회하던 이슈를 진입점에서 해결. `AdditionalValidationManager` AOP 의 `settingDefaultData()` 가 `payType=AUTH → spmCd='01'` 로 강제 세팅하던 것을, **컨트롤러 진입 직전 `overrideSpmCdForPmCd(dto, PM_CD_32_CULTURE, SPM_CD_07_CULTURE)` 호출로 culture 일 때 '07' 로 덮어쓰기** 추가. + `CommonService` 의 culture stub 분기 SPM_CD_01_AUTH → SPM_CD_07_CULTURE 정정. 효과: TBTR_REQ INSERT 부터 SPM_CD='07' 로 들어감 → selectMerchantInfo 가 빈 결과 안 반환 → 다운스트림 BLD 송신 시도 spmCd='07' 정상. |
-| 2026-05-21 | — | **CULTURE_RSLT_CD 공통코드 전수 등재** — NICEPG_RSLT_CD 패턴 (PG 자체 응답코드 ↔ 내부코드 매핑) 을 CULTURE 에도 적용. `[최신]쇼핑몰에러코드정의.pptx` (CI 방식) 6장에서 추출한 컬쳐랜드 RetVal 109건 (CODE1: 01=로그인 31 / 02=결제 41 / 03=취소 14 / 04=부분취소 23). CODE4 매핑: 정상=0000 / 푸시로그인=F201 / 통신·점검=F901 / 잔액·한도=3081 / 기타=F999. 신규 SQL `2026-05-21_컬처캐쉬_CULTURE_RSLT_CD_등재.sql` (v03 보조, idempotent). _LATEST.md §2-2 와 §10 신설. |
 | 2026-05-19 | — | **오늘 종료** — BLD 아키텍처 분석 완료: BLD는 pmCd 별 별도 JVM 인스턴스로 실행되고, FRONT 가 `info-{env}.json` 의 IP/PORT 로 TCP 송신함. `BldApplication.main()` 은 단일 SolPayServer 만 띄우며, `-Dbld.id=` 옵션으로 payinfo-{env}.json 의 어느 pmCd 엔트리를 쓸지 결정. **내일(2026-05-20) 시작 지점: `-Dbld.id=CULTURE` 옵션으로 새 BLD JVM 인스턴스 실행 → 20501 포트 LISTEN 확인 → FRONT 결제 E2E 재시도 → Step 07 (BLD common.xml saveMstr PM_CD=32 분기)**. 학습 자료는 `C:\Users\finger\.claude\projects\C--Users-finger-Downloads-01-----07---------\memory\` 에 reference 노트 3건(arch/validation/hash) + project status 1건 저장. |

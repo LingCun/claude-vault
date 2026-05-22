@@ -37,6 +37,8 @@ tags:
 | 파일 | 설명 | 상태 |
 |---|---|---|
 | **[[_LATEST\|★ 현행상태 (최종 적용본)]]** | **현재 시점에 실제 적용된 코드/DB/명명 상태만 기록. 변경 발생 시 덮어쓰기** | **active (단일 진실 공급원)** |
+| [[2026-05-22_컬처캐쉬_지라_분석설계\|★ Jira 분석/설계 등록용 문서 (풀버전)]] | 총괄/기획/테스터 대상 분석·설계 정리본 12개 섹션 | **active (2026-05-22 신규)** |
+| [[2026-05-22_컬처캐쉬_지라_분석설계_축약본\|★ Jira 분석/설계 축약본 (FP-411 페이스트용)]] | 풀버전 축약. Mermaid → 텍스트 흐름, 표 압축 | **active (2026-05-22 신규)** |
 | [[2026-05-18_컬처캐쉬_연동_분석보고서_v01.0\|분석 보고서 (.md)]] | CULTURE 테이블 명세, 컬쳐랜드 ↔ 핑거페이 매핑, 공수 산정, 테스트 환경 구성 | active (2026-05-19 DB명 정정 반영) |
 | [[2026-05-18_컬처캐쉬_FRONT변경파일목록_step01\|FRONT 변경파일 목록 — Step 01]] | sample.html + orderSampleCulture.html + cancelSampleCulture.html | done |
 | [[2026-05-19_컬처캐쉬_FRONT변경파일목록_step02\|FRONT 변경파일 목록 — Step 02]] | Constants.java + CultureCashService.doStart() spmCd 교체 | done |
@@ -149,3 +151,4 @@ sequenceDiagram
 | 2026-05-19 | — | **승인 호출 NPE 수정** — `/payment/v1/approval` 의 `PayMethodService.doResult()` 에서 `info-{env}.json` 에 `"CULTURE"` 키 없어서 paymethodInfoMap NPE 발생. (1) FRONT `info-local.json/dev/prod` 에 `"CULTURE"` 엔트리 추가 (XX:DEFAULT IP=127.0.0.1 PORT=20501), (2) BLD `payinfo-local.json/dev/prod` 에 pmCd=32/bldId=CULTURE/bldPort=20501 엔트리 추가 (VACNT 패턴 차용, mandatory saveTbtrCulture). 또한 `CultureReturnController` 에 hashString/ediDate 생성 추가 (SHA256(mid+ediDate+goodsAmt+mkey)) — `@ValidHashMap` AOP 통과용. |
 | 2026-05-19 | — | **spmCd=01→07 근본 해결** — 그동안 stub 분기로 우회하던 이슈를 진입점에서 해결. `AdditionalValidationManager` AOP 의 `settingDefaultData()` 가 `payType=AUTH → spmCd='01'` 로 강제 세팅하던 것을, **컨트롤러 진입 직전 `overrideSpmCdForPmCd(dto, PM_CD_32_CULTURE, SPM_CD_07_CULTURE)` 호출로 culture 일 때 '07' 로 덮어쓰기** 추가. + `CommonService` 의 culture stub 분기 SPM_CD_01_AUTH → SPM_CD_07_CULTURE 정정. 효과: TBTR_REQ INSERT 부터 SPM_CD='07' 로 들어감 → selectMerchantInfo 가 빈 결과 안 반환 → 다운스트림 BLD 송신 시도 spmCd='07' 정상. |
 | 2026-05-19 | — | **오늘 종료** — BLD 아키텍처 분석 완료: BLD는 pmCd 별 별도 JVM 인스턴스로 실행되고, FRONT 가 `info-{env}.json` 의 IP/PORT 로 TCP 송신함. `BldApplication.main()` 은 단일 SolPayServer 만 띄우며, `-Dbld.id=` 옵션으로 payinfo-{env}.json 의 어느 pmCd 엔트리를 쓸지 결정. **내일(2026-05-20) 시작 지점: `-Dbld.id=CULTURE` 옵션으로 새 BLD JVM 인스턴스 실행 → 20501 포트 LISTEN 확인 → FRONT 결제 E2E 재시도 → Step 07 (BLD common.xml saveMstr PM_CD=32 분기)**. 학습 자료는 `C:\Users\finger\.claude\projects\C--Users-finger-Downloads-01-----07---------\memory\` 에 reference 노트 3건(arch/validation/hash) + project status 1건 저장. |
+| 2026-05-22 | — | **Jira 분석/설계 등록용 문서 작성** — 대상 독자(총괄관리자/기획자/테스터) 맞춰 [[2026-05-22_컬처캐쉬_지라_분석설계]] 신규. 구성: 개요/영향도/데이터설계/처리흐름(LIVE+MOCK)/인증보안(해시 2종)/산출물요약/일정·인력(26.5MD)/Phase현황/위험·제약(R1~R5)/테스트범위(T1~T9)/한계·후속과제/참고산출물. 코드 절대경로 디테일은 step 노트에 위임. |

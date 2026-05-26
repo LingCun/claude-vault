@@ -1,8 +1,8 @@
 ---
 project: 컬처캐쉬
-status: 'Phase 2 Step 02~06 + 보강 패치 완료 / 2026-05-20 시작: BLD JVM(-Dbld.id=CULTURE) 실행'
+status: 'Phase 2 Step 02~06 + 보강 패치 완료 / 2026-05-26 FRONT→BLD TID 누락 보강 완료'
 created: 2026-05-18
-updated: 2026-05-19
+updated: 2026-05-26
 tags:
   - 업무
   - 핑거페이
@@ -46,6 +46,7 @@ tags:
 | [[2026-05-19_컬처캐쉬_FRONT변경파일목록_step04\|FRONT 변경파일 목록 — Step 04]] | CultureReturnController + cultureReturn.html + CultureCashService INSERT/returnUrl 변경 | done |
 | [[2026-05-19_컬처캐쉬_BLD변경파일목록_step05\|BLD 변경파일 목록 — Step 05]] | CultureMapper.java + culture.xml + mybatis-config 등록 (TBTR_CULTURE/TBUS_CULTURE) | done |
 | [[2026-05-19_컬처캐쉬_BLD변경파일목록_step06\|BLD 변경파일 목록 — Step 06]] | CultureConstants + CommonCultureMethod + PayCultureBean + CancelCultureBean (Mock 모드) | done |
+| [[2026-05-26_컬처캐쉬_FRONT변경파일목록_tid보강\|FRONT TID 보강 — 2026-05-26]] | MerchantMapper.updateTransRequestTidForCulture 신설 + CultureReturnController 콜백 UPDATE + CultureCashService.doMakeBldSendApprovalData 오버라이드 (방어 다층) | done |
 | [[2026-05-19_컬처캐쉬_네이밍규약_정정\|네이밍 규약 정정 (CULTURELAND/CURT → CULTURE)]] | 사용자 수동 일괄 변경. front 1차(코드) + 2차(DB) 모두 적용 | **active (반드시 참고)** |
 | [가맹점용 연동 가이드 (.docx)](2026-05-18_핑거페이_가맹점연동가이드_컬처캐쉬_v01.0.docx) | 가맹점이 컬처캐쉬 연동 시 참고 | active |
 | **[★ DB셋업 SQL v03 (.sql)](2026-05-19_컬처캐쉬_DB셋업_v03.sql)** | **실제 적용용** (CULTURE 3종 DDL, PTN_CD='CULT' (4자), PTN_CPID='MOCKCULTURE1'). §① TEARDOWN (CURT+CULTURE 양쪽 DROP/DELETE) → §②~④ 신규 CREATE/INSERT. **idempotent** — 기존 환경 상태와 무관하게 재실행 가능 | **active** |
@@ -152,3 +153,4 @@ sequenceDiagram
 | 2026-05-19 | — | **spmCd=01→07 근본 해결** — 그동안 stub 분기로 우회하던 이슈를 진입점에서 해결. `AdditionalValidationManager` AOP 의 `settingDefaultData()` 가 `payType=AUTH → spmCd='01'` 로 강제 세팅하던 것을, **컨트롤러 진입 직전 `overrideSpmCdForPmCd(dto, PM_CD_32_CULTURE, SPM_CD_07_CULTURE)` 호출로 culture 일 때 '07' 로 덮어쓰기** 추가. + `CommonService` 의 culture stub 분기 SPM_CD_01_AUTH → SPM_CD_07_CULTURE 정정. 효과: TBTR_REQ INSERT 부터 SPM_CD='07' 로 들어감 → selectMerchantInfo 가 빈 결과 안 반환 → 다운스트림 BLD 송신 시도 spmCd='07' 정상. |
 | 2026-05-19 | — | **오늘 종료** — BLD 아키텍처 분석 완료: BLD는 pmCd 별 별도 JVM 인스턴스로 실행되고, FRONT 가 `info-{env}.json` 의 IP/PORT 로 TCP 송신함. `BldApplication.main()` 은 단일 SolPayServer 만 띄우며, `-Dbld.id=` 옵션으로 payinfo-{env}.json 의 어느 pmCd 엔트리를 쓸지 결정. **내일(2026-05-20) 시작 지점: `-Dbld.id=CULTURE` 옵션으로 새 BLD JVM 인스턴스 실행 → 20501 포트 LISTEN 확인 → FRONT 결제 E2E 재시도 → Step 07 (BLD common.xml saveMstr PM_CD=32 분기)**. 학습 자료는 `C:\Users\finger\.claude\projects\C--Users-finger-Downloads-01-----07---------\memory\` 에 reference 노트 3건(arch/validation/hash) + project status 1건 저장. |
 | 2026-05-22 | — | **Jira 분석/설계 등록용 문서 작성** — 대상 독자(총괄관리자/기획자/테스터) 맞춰 [[2026-05-22_컬처캐쉬_지라_분석설계]] 신규. 구성: 개요/영향도/데이터설계/처리흐름(LIVE+MOCK)/인증보안(해시 2종)/산출물요약/일정·인력(26.5MD)/Phase현황/위험·제약(R1~R5)/테스트범위(T1~T9)/한계·후속과제/참고산출물. 코드 절대경로 디테일은 step 노트에 위임. |
+| 2026-05-26 | — | **FRONT→BLD TID 누락 보강** — 사용자 보고: BLD 송신 데이터에 tid 누락. 원인: 컬처는 PG 콜백 단계에서 `updateTransRequest` 호출이 없어 `TBTR_REQ.TID` 미갱신 → `PayService.approval` 의 `selectTransRequest(nonce)` 결과 `transMap.tid=null` → `PayMethodService.doMakeBldSendApprovalData` 가 송신 데이터에 null 박음. 보강 다층 적용: (B) `MerchantMapper.updateTransRequestTidForCulture` 신설 + `CultureReturnController` 에서 콜백 시 TBTR_REQ.TID 갱신, (A) `CultureCashService.doMakeBldSendApprovalData` 오버라이드 (CardService/VacntService 패턴) — `transMap.tid` 비면 `reqMap.tid` 로 fallback. 상세: [[2026-05-26_컬처캐쉬_FRONT변경파일목록_tid보강]]. |

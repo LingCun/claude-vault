@@ -1,8 +1,8 @@
 ---
 project: 컬처캐쉬
-status: 'Phase 2 Step 02~06 + 보강 패치 완료 / 2026-05-20 시작: BLD JVM(-Dbld.id=CULTURE) 실행 → E2E 검증 → Step 07'
+status: 'Phase 2 Step 02~06 + 보강 패치 완료 / 2026-05-26 FRONT→BLD TID 누락 보강 완료 / 잔여: BLD common.xml saveMstr PM_CD=32 분기 (Step 07)'
 created: 2026-05-18
-updated: 2026-05-19
+updated: 2026-05-26
 tags:
   - 업무
   - 핑거페이
@@ -91,6 +91,10 @@ up: "[[_INDEX]]"
 | PaymentOrderReq.java | `C:\Users\finger\Downloads\01. 작업\07. 컬처캐시 연동\front\src\main\java\solpay\wiezon\com\dto\request\v1Rest\PaymentOrderReq.java` | 상동 |
 | WiezonUtil.java | `C:\Users\finger\Downloads\01. 작업\07. 컬처캐시 연동\front\src\main\java\solpay\wiezon\com\util\WiezonUtil.java` | switch case 정리, 별도 "CULTURE" 분기 제거 |
 | sample.html | `C:\Users\finger\Downloads\01. 작업\07. 컬처캐시 연동\front\src\main\resources\static\sample.html` | 메뉴 「문화상품권」 행 추가 (orderSampleCulture/cancelSampleCulture 링크) |
+| MerchantMapper.java | `C:\Users\finger\Downloads\01. 작업\07. 컬처캐시 연동\front\src\main\java\solpay\wiezon\com\mapper\MerchantMapper.java` | **2026-05-26** `updateTransRequestTidForCulture(Map)` 추가 — 컬처 콜백 전용 TBTR_REQ.TID/PM_CD/SPM_CD 최소 UPDATE |
+| MerchantMapper.xml | `C:\Users\finger\Downloads\01. 작업\07. 컬처캐시 연동\front\src\main\resources\mapper\MerchantMapper.xml` | **2026-05-26** `updateTransRequestTidForCulture` 쿼리 신설 — `UPDATE TBTR_REQ SET TID/PM_CD/SPM_CD WHERE NONCE` |
+| CultureReturnController.java (재) | (상동) | **2026-05-26** `effectiveTid` 확정 후 `updateTransRequestTidForCulture` 호출 추가 — `transMap.tid` 가 null 이라 BLD 송신 tid 누락되던 문제 보강 |
+| CultureCashService.java (재) | (상동) | **2026-05-26** `doMakeBldSendApprovalData(transMap, reqMap)` 오버라이드 추가 (CardService/VacntService 패턴) — `transMap.tid` 비고 `reqMap.tid` 있으면 보강 후 `super` 호출 (방어 다층) |
 
 ### 3-3) 삭제된 파일 (구 명명)
 
@@ -230,6 +234,7 @@ sequenceDiagram
 
 1. **CultureReturnController STEP1 임시 항상 성공** — 현재 `/cultureReturn.do` 는 form param 무관하게 RetVal=0000 으로 합성. 컬쳐랜드 실연동 시점에 form param (RetVal/HashNo/etc) 사용하는 REAL 분기로 전환 필요. 코드 내 `// STEP1` 주석 부위 검색.
 2. **CultureCashService.doStart() TID 타이밍 이슈** — TID 가 doStart() 이후에 생성되므로 TBAT_CULTURE INSERT 가 doStart 시점에서는 skip 됨. 임시로 `culture/common.html` 의 `submitMockReturn()` 이 `paymethodRes.tid` 를 hidden form 필드(`tid`, `mid`, `reqAmt`)로 전달하고, 콜백 컨트롤러가 그 값으로 보강 INSERT 함. (안전망: form param 도 비었으면 NONCE 를 임시 TID 로 사용하지만 의미상 부적절하므로 로그 warn 출력) 근본 해결: TID 생성 타이밍을 doStart 이전으로 옮기거나 doStart 내부에서 직접 createTid 호출.
+2-A. ~~**FRONT→BLD 송신 tid 누락**~~ — **2026-05-26 보강 완료**: 컬처 흐름은 PG 콜백 단계에서 `updateTransRequest` 호출이 없어 `TBTR_REQ.TID` 미갱신 → `PayService.approval` 의 `selectTransRequest(nonce)` 결과 `transMap.tid=null` → `PayMethodService.doMakeBldSendApprovalData` 가 BLD 송신 데이터에 tid null 박음. 보강 2층: (B) `CultureReturnController` 에서 `updateTransRequestTidForCulture` 호출하여 TBTR_REQ.TID 갱신 + (A) `CultureCashService.doMakeBldSendApprovalData` 오버라이드로 transMap.tid 비면 reqMap.tid 로 fallback. 상세: [[2026-05-26_컬처캐쉬_FRONT변경파일목록_tid보강]].
 3. ~~**`selectMerchantInfo` 의 spmCd='01' 이슈**~~ — **2026-05-19 해결됨**: `AdditionalValidationManager` AOP 의 `settingDefaultData()` 끝에 `overrideSpmCdForPmCd(dto, PM_CD_32_CULTURE, SPM_CD_07_CULTURE)` 추가하여 PM_CD=32 시 spmCd='07' 강제 보정. + `CommonService` 의 culture stub 분기에서도 SPM_CD_01_AUTH → SPM_CD_07_CULTURE 로 정정.
 4. **가맹점 returnUrl auto-POST 미구현** — `/cultureReturn.do` 가 현재 디버그용 결과 페이지만 렌더. Step 06~ 에서 BLD 승인 흐름 완성 후 가맹점-facing 콜백 hidden form 추가.
 5. **HashNo timeout 검증 미구현** — `TBAT_CULTURE.REG_DNT` 기준 10분 timeout 정책 결정 후 별도 추가.
